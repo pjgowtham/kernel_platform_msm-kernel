@@ -438,30 +438,6 @@ int tcpci_notify_cable_type(struct tcpc_device *tcpc)
 EXPORT_SYMBOL(tcpci_notify_cable_type);
 #endif /* CONFIG_CABLE_TYPE_DETECTION */
 
-#ifdef OPLUS_FEATURE_CHG_BASIC
-int tcpci_notify_switch_get_state(struct tcpc_device *tcpc, bool (*pfunc)(int))
-{
-	struct tcp_notify tcp_noti;
-
-	tcp_noti.switch_get_status.pfunc = pfunc;
-	return tcpc_check_notify_time(tcpc, &tcp_noti, TCP_NOTIFY_IDX_MISC,
-				TCP_NOTIFY_SWITCH_GET_STATE);
-}
-EXPORT_SYMBOL(tcpci_notify_switch_get_state);
-
-int tcpci_notify_switch_set_state(struct tcpc_device *tcpc, bool state, bool (*pfunc)(int))
-{
-	struct tcp_notify tcp_noti;
-
-	tcp_noti.switch_set_status.state = state;
-	tcp_noti.switch_set_status.pfunc = pfunc;
-	pr_err("%s state: %d\n", __func__, state);
-	return tcpc_check_notify_time(tcpc, &tcp_noti, TCP_NOTIFY_IDX_MISC,
-			TCP_NOTIFY_SWITCH_SET_STATE);
-}
-EXPORT_SYMBOL(tcpci_notify_switch_set_state);
-#endif
-
 #if IS_ENABLED(CONFIG_USB_POWER_DELIVERY)
 
 int tcpci_set_msg_header(struct tcpc_device *tcpc,

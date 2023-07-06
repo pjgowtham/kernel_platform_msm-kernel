@@ -33,24 +33,6 @@
 /* MAX_MARGIN_LEVELS should be one less than MAX_CLUSTERS */
 #define MAX_MARGIN_LEVELS (MAX_CLUSTERS - 1)
 
-enum EM_CLUSTER_TYPE {
-	EM_CLUSTER_MIN = 0,
-	EM_CLUSTER_MID,
-	EM_CLUSTER_MAX,
-	EM_CLUSTER_NUM,
-};
-
-struct em_map_util_freq {
-	int gov_id;
-	void (*pgov_map_func)(void *data, unsigned long util, unsigned long freq,
-		unsigned long cap, unsigned long *max_util, struct cpufreq_policy *policy,
-		bool *need_freq_update);
-};
-
-struct cluster_em_map_util_freq {
-	struct em_map_util_freq cem_map_util_freq[EM_CLUSTER_NUM];
-};
-
 extern bool walt_disabled;
 
 enum task_event {
@@ -162,12 +144,6 @@ extern struct walt_sched_cluster *sched_cluster[WALT_NR_CPUS];
 
 /*END SCHED.H PORT*/
 
-extern void default_em_map_util_freq(void *data, unsigned long util, unsigned long freq,
-	unsigned long cap, unsigned long *max_util, struct cpufreq_policy *policy,
-	bool *need_freq_update);
-
-extern struct cluster_em_map_util_freq g_em_map_util_freq;
-extern u64 walt_ktime_get_ns(void);
 extern int num_sched_clusters;
 extern unsigned int sched_capacity_margin_up[WALT_NR_CPUS];
 extern unsigned int sched_capacity_margin_down[WALT_NR_CPUS];

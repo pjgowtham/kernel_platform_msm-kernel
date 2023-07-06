@@ -82,8 +82,6 @@ unsigned int walt_rotation_enabled;
 cpumask_t asym_cap_sibling_cpus = CPU_MASK_NONE;
 
 unsigned int __read_mostly sched_ravg_window = 20000000;
-EXPORT_SYMBOL(sched_ravg_window);
-
 unsigned int min_max_possible_capacity = 1024;
 unsigned int max_possible_capacity = 1024; /* max(rq->max_possible_capacity) */
 /* Initial task load. Newly created tasks are assigned this load. */
@@ -97,32 +95,6 @@ unsigned int __read_mostly sched_init_task_load_windows;
  * sched_load_granule.
  */
 unsigned int __read_mostly sched_load_granule;
-
-void default_em_map_util_freq(void *data, unsigned long util, unsigned long freq,
-	unsigned long cap, unsigned long *max_util, struct cpufreq_policy *policy,
-	bool *need_freq_update)
-{
-	return;
-}
-EXPORT_SYMBOL(default_em_map_util_freq);
-
-struct cluster_em_map_util_freq g_em_map_util_freq = {
-	.cem_map_util_freq = {
-		{
-			.gov_id = 0,
-			.pgov_map_func = default_em_map_util_freq,
-		},
-		{
-			.gov_id = 0,
-			.pgov_map_func = default_em_map_util_freq,
-		},
-		{
-			.gov_id = 0,
-			.pgov_map_func = default_em_map_util_freq,
-		},
-	},
-};
-EXPORT_SYMBOL(g_em_map_util_freq);
 
 /*
  *@boost:should be 0,1,2.
@@ -153,7 +125,6 @@ u64 walt_ktime_get_ns(void)
 		return ktime_to_ns(ktime_last);
 	return ktime_get_ns();
 }
-EXPORT_SYMBOL(walt_ktime_get_ns);
 
 static void walt_resume(void)
 {
@@ -728,7 +699,6 @@ cpu_util_freq_walt(int cpu, struct walt_cpu_load *walt_load)
 
 	return (util >= capacity) ? capacity : util;
 }
-EXPORT_SYMBOL(cpu_util_freq_walt);
 
 /*
  * In this function we match the accumulated subtractions with the current

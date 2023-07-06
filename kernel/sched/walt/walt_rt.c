@@ -198,10 +198,6 @@ static inline bool walt_rt_task_fits_capacity(struct task_struct *p, int cpu)
 static inline bool walt_should_honor_rt_sync(struct rq *rq, struct task_struct *p,
 					     bool sync)
 {
-#if IS_ENABLED(CONFIG_OPLUS_FEATURE_FRAME_BOOST)
-	fbg_skip_rt_sync(rq, p, &sync);
-#endif
-
 #if IS_ENABLED(CONFIG_OPLUS_FEATURE_SCHED_ASSIST)
 	sa_skip_rt_sync(rq, p, &sync);
 #endif

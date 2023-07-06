@@ -89,6 +89,4 @@ source "kernel/oplus_cpu/oplus_overload/Kconfig"
 #ifdef OPLUS_FEATURE_MODEM_MINIDUMP
 source "drivers/soc/oplus/mdmrst/Kconfig"
 #endif /*OPLUS_FEATURE_MODEM_MINIDUMP*/
-
-source "kernel/oplus_cpu/uad/Kconfig"
 endmenu

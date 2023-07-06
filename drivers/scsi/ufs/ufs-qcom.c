@@ -20,6 +20,9 @@
 #include <linux/blk-mq.h>
 #include <linux/thermal.h>
 #include <linux/cpufreq.h>
+/*feature-devinfo-v001-1-begin*/
+#include <trace/hooks/ufshcd.h>
+/*feature-devinfo-v001-1-end*/
 #include <linux/debugfs.h>
 #include <linux/ipc_logging.h>
 /*feature-memorymonitor-v001-1-begin*/
@@ -44,13 +47,6 @@
 /*feature-memorymonitor-v001-2-begin*/
 #include "../sd.h"
 /*feature-memorymonitor-v001-2-end*/
-
-#define CREATE_TRACE_POINTS
-#include <trace/events/ufs.h>
-
-#undef CREATE_TRACE_POINTS
-#include <trace/hooks/ufshcd.h>
-
 #define UFS_QCOM_DEFAULT_DBG_PRINT_EN	\
 	(UFS_QCOM_DBG_PRINT_REGS_EN | UFS_QCOM_DBG_PRINT_TEST_BUS_EN)
 
@@ -96,7 +92,6 @@ int ufsplus_wb_status = 0;
 int ufsplus_hpb_status = 0;
 //static bool no_defer;
 
-static struct ufs_hba *debug_hba;
 /* clk freq mode */
 enum {
 	LOW_SVS,
@@ -137,9 +132,6 @@ struct ufs_qcom_dev_params {
 	u32 desired_working_mode;
 };
 
-#if defined(CONFIG_UFSFEATURE)
-static void ufs_samsung_register_hooks(void);
-#endif
 static struct ufs_qcom_host *ufs_qcom_hosts[MAX_UFS_QCOM_HOSTS];
 
 static void ufs_qcom_get_default_testbus_cfg(struct ufs_qcom_host *host);
@@ -1006,48 +998,6 @@ static int ufs_qcom_set_dme_vs_core_clk_ctrl_max_freq_mode(struct ufs_hba *hba)
 
 	return err;
 }
-
-#if defined(CONFIG_UFSFEATURE)
-static void ufs_vh_prep_fn(void *data, struct ufs_hba *hba,
-			struct request *rq, struct ufshcd_lrb *lrbp, int *err)
-{
-	ufsf_change_lun(ufs_qcom_get_ufsf(hba), lrbp);
-	*err = ufsf_prep_fn(ufs_qcom_get_ufsf(hba), lrbp);
-}
-
-static void ufs_vh_compl_command(void *data, struct ufs_hba *hba,
-			struct ufshcd_lrb *lrbp)
-{
-	struct utp_upiu_header *header = &lrbp->ucd_rsp_ptr->header;
-	struct scsi_cmnd *cmd = lrbp->cmd;
-	int scsi_status, result, ocs;
-
-	if (!cmd)
-		return;
-
-	ocs = le32_to_cpu(lrbp->utr_descriptor_ptr->header.dword_2) & MASK_OCS;
-	if (ocs != OCS_SUCCESS)
-		return;
-
-	result = be32_to_cpu(header->dword_0) >> 24;
-	if (result != UPIU_TRANSACTION_RESPONSE)
-		return;
-
-	scsi_status = be32_to_cpu(header->dword_1) & MASK_SCSI_STATUS;
-	if (scsi_status != SAM_STAT_GOOD)
-		return;
-
-	ufsf_upiu_check_for_ccd(lrbp);
-}
-
-static void ufs_vh_update_sdev(void *data, struct scsi_device *sdev)
-{
-	struct ufs_hba *hba = shost_priv(sdev->host);
-	struct ufsf_feature *ufsf = ufs_qcom_get_ufsf(hba);
-
-	ufsf_slave_configure(ufsf, sdev);
-}
-#endif
 
 /**
  * ufs_qcom_bypass_cfgready_signal - Tunes PA_VS_CONFIG_REG1 and
@@ -2295,36 +2245,6 @@ out:
 	return ret;
 }
 
-static void ufs_qcom_override_pa_tx_hsg1_sync_len(struct ufs_hba *hba)
-{
-//modify G1  tx sync len to 4f
-#define PA_TX_HSG1_SYNC_LENGTH 0x1552
-#define PA_TX_HSG4_SYNC_LENGTH 0x15D0
-	int err;
-	int sync_len_val = 0x4F;
-
-	err = ufshcd_dme_peer_set(hba, UIC_ARG_MIB(PA_TX_HSG1_SYNC_LENGTH),
-				sync_len_val);
-
-	if (err)
-		dev_err(hba->dev, "Failed (%d) set PA_TX_HSG1_SYNC_LENGTH(%d)\n",
-				err, sync_len_val);
-
-	sync_len_val = 0;
-	err = ufshcd_dme_peer_get(hba, UIC_ARG_MIB(PA_TX_HSG1_SYNC_LENGTH),
-				&sync_len_val);
-
-	if (err)
-		dev_err(hba->dev, "Failed get PA_TX_HSG1_SYNC_LENGTH(%x)\n",
-				sync_len_val);
-
-	printk("SAMSUNG Solvit UFS: set PA_TX_HSG1_SYNC_LENGTH to 0x%x \n", sync_len_val);
-	if (hba->dev_info.model) {
-		printk("SAMSUNG Solvit UFS: model=%s\n", hba->dev_info.model);
-	}
-	return;
-}
-
 static int ufs_qcom_apply_dev_quirks(struct ufs_hba *hba)
 {
 	unsigned long flags;
@@ -2348,9 +2268,6 @@ static int ufs_qcom_apply_dev_quirks(struct ufs_hba *hba)
 
 	if (hba->dev_quirks & UFS_DEVICE_QUIRK_PA_HIBER8TIME)
 		ufs_qcom_override_pa_h8time(hba);
-
-	if (hba->dev_quirks & UFS_DEVICE_QUIRK_PA_TX_HSG1_SYNC_LENGTH)
-		ufs_qcom_override_pa_tx_hsg1_sync_len(hba);
 
 	ufshcd_parse_pm_levels(hba);
 
@@ -2717,16 +2634,6 @@ ufs_qcom_query_ioctl(struct ufs_hba *hba, u8 lun, void __user *buffer)
 			__func__, err);
 		goto out_release_mem;
 	}
-
-#if defined(CONFIG_UFSFEATURE)
-	if (hba->dev_quirks & UFS_DEVICE_QUIRK_SAMSUNG_QLC) {
-		if (ufsf_check_query(ioctl_data->opcode)) {
-			err = ufsf_query_ioctl(ufs_qcom_get_ufsf(hba), lun, buffer,
-					ioctl_data, UFSFEATURE_SELECTOR);
-			goto out_release_mem;
-		}
-	}
-#endif
 
 	/* verify legal parameters & send query */
 	switch (ioctl_data->opcode) {
@@ -3658,17 +3565,11 @@ static void recordTimeStamp(
 	case UFS_EVT_DME_ERR:
 		if (STAMP_RECORD_MAX <= record->stamp_pos)
 			return;
-		if (0 == record->stamp_pos) {
-			record->stamp[0] = cur_time;
-			record->hs[0] = debug_hba->pwr_info.pwr_tx;
-			record->gear[record->stamp_pos++] = debug_hba->pwr_info.gear_tx;
-		}
+		if (0 == record->stamp_pos)
+			record->stamp[record->stamp_pos++] = cur_time;
 		else if (cur_time > (record->stamp[record->stamp_pos - 1] +
-				STAMP_MIN_INTERVAL)) {
-			record->stamp[record->stamp_pos] = cur_time;
-			record->hs[record->stamp_pos] = debug_hba->pwr_info.pwr_tx;
-			record->gear[record->stamp_pos++] = debug_hba->pwr_info.gear_tx;
-		}
+				STAMP_MIN_INTERVAL))
+			record->stamp[record->stamp_pos++] = cur_time;
 		return;
 	default:
 		return;
@@ -3752,9 +3653,7 @@ void recordUniproErr(
 #define SEQ_DME_PRINT(x)    \
 	seq_printf(s, #x"\t%d\n", signalCtrl->record.unipro_DME_err_cnt[x])
 #define SEQ_STAMP_PRINT(x)  \
-	seq_printf(s, #x"\t%lld\n", signalCtrl->record.stamp[x])
-#define SEQ_GEAR_PRINT(x)  \
-	seq_printf(s, #x"\t%d %d\n", signalCtrl->record.hs[x], signalCtrl->record.gear[x])
+	seq_printf(s, #x"\t%d\n", signalCtrl->record.stamp[x])
 
 static int record_read_func(struct seq_file *s, void *v)
 {
@@ -3817,16 +3716,6 @@ static int record_read_func(struct seq_file *s, void *v)
 	SEQ_STAMP_PRINT(UNIPRO_7_STAMP);
 	SEQ_STAMP_PRINT(UNIPRO_8_STAMP);
 	SEQ_STAMP_PRINT(UNIPRO_9_STAMP);
-	SEQ_GEAR_PRINT(UNIPRO_0_GEAR);
-	SEQ_GEAR_PRINT(UNIPRO_1_GEAR);
-	SEQ_GEAR_PRINT(UNIPRO_2_GEAR);
-	SEQ_GEAR_PRINT(UNIPRO_3_GEAR);
-	SEQ_GEAR_PRINT(UNIPRO_4_GEAR);
-	SEQ_GEAR_PRINT(UNIPRO_5_GEAR);
-	SEQ_GEAR_PRINT(UNIPRO_6_GEAR);
-	SEQ_GEAR_PRINT(UNIPRO_7_GEAR);
-	SEQ_GEAR_PRINT(UNIPRO_8_GEAR);
-	SEQ_GEAR_PRINT(UNIPRO_9_GEAR);
 	return 0;
 }
 
@@ -3945,7 +3834,6 @@ static int ufs_qcom_init(struct ufs_hba *hba)
 #endif
 	host->crash_on_err =
 		of_property_read_bool(np, "qcom,enable_crash_on_err");
-	debug_hba = hba;
 
 	/* Setup the reset control of HCI */
 	host->core_reset = devm_reset_control_get(hba->dev, "rst");
@@ -5139,12 +5027,6 @@ static int ufs_qcom_device_reset(struct ufs_hba *hba)
 	struct ufs_qcom_host *host = ufshcd_get_variant(hba);
 	int ret;
 
-#if defined(CONFIG_UFSFEATURE)
-	if (hba->dev_quirks & UFS_DEVICE_QUIRK_SAMSUNG_QLC) {
-		ufsf_reset_host(ufs_qcom_get_ufsf(hba));
-	}
-#endif
-
 	/* Reset UFS Host Controller and PHY */
 	ret = ufs_qcom_host_reset(hba);
 	if (ret)
@@ -5193,49 +5075,18 @@ static struct ufs_dev_fix ufs_qcom_dev_fixups[] = {
 		UFS_DEVICE_QUIRK_DELAY_BEFORE_LPM),
 	UFS_FIX(UFS_VENDOR_WDC, UFS_ANY_MODEL,
 		UFS_DEVICE_QUIRK_HOST_PA_TACTIVATE),
-//#ifdef FIX_SAMSUNG_Solvit-FCx_PROTECTION_TIMER_EXPIRED
-	UFS_FIX(UFS_VENDOR_SAMSUNG, "KLUEG4RHGB-B0E1",
-		UFS_DEVICE_QUIRK_PA_TX_HSG1_SYNC_LENGTH),
-	UFS_FIX(UFS_VENDOR_SAMSUNG, "KLUFG8RHGB-B0E1",
-		UFS_DEVICE_QUIRK_PA_TX_HSG1_SYNC_LENGTH),
-	UFS_FIX(UFS_VENDOR_SAMSUNG, "KLUGGARHGB-B0E1",
-		UFS_DEVICE_QUIRK_PA_TX_HSG1_SYNC_LENGTH),
-//#endif
-//#ifdef SAMSUNG_QLC
-	UFS_FIX(UFS_VENDOR_SAMSUNG, "KLUFG4LHGC-B0E1",
-		UFS_DEVICE_QUIRK_SAMSUNG_QLC),
-//#endif
 	END_FIX
 };
 
 static void ufs_qcom_fixup_dev_quirks(struct ufs_hba *hba)
 {
 	ufshcd_fixup_dev_quirks(hba, ufs_qcom_dev_fixups);
-
-	/* Register hook for samsung feature */
-	if (hba->dev_quirks & UFS_DEVICE_QUIRK_SAMSUNG_QLC) {
-		ufs_samsung_register_hooks();
-		if (hba->caps & UFSHCD_CAP_WB_EN) {
-			hba->caps &= ~UFSHCD_CAP_WB_EN;
-		}
-		ufsf_set_init_state(hba);
-	}
 }
 /*feature-flashaging806-v001-4-begin*/
 static void ufs_qcom_event_notify(struct ufs_hba *hba,
 	enum ufs_event_type evt, void *data)
 {
-	u32 reg;
-#if defined(CONFIG_UFSFEATURE)
-	unsigned int val = *(u32 *)data;
-
-	if (hba->dev_quirks & UFS_DEVICE_QUIRK_SAMSUNG_QLC) {
-		if (evt == UFS_EVT_DEV_RESET && val == 0)
-			ufsf_reset_lu(ufs_qcom_get_ufsf(hba));
-	}
-#endif
-
-	reg = *(u32 *)data;
+	u32 reg = *(u32 *)data;
 	recordUniproErr(&signalCtrl, reg, evt);
 }
 /*feature-flashaging806-v001-4-end*/
@@ -5791,18 +5642,6 @@ static int ufs_cpufreq_status(void)
 }
 #endif
 
-#if defined(CONFIG_UFSFEATURE)
-static void ufs_samsung_register_hooks(void)
-{
-	register_trace_android_vh_ufs_prepare_command(
-			ufs_vh_prep_fn, NULL);
-	register_trace_android_vh_ufs_compl_command(
-			ufs_vh_compl_command, NULL);
-	register_trace_android_vh_ufs_update_sdev(
-			ufs_vh_update_sdev, NULL);
-}
-#endif
-
 static int ufs_qcom_read_boot_config(struct platform_device *pdev)
 {
 	u8 *buf;
@@ -5916,12 +5755,6 @@ static int ufs_qcom_remove(struct platform_device *pdev)
 	qcg = r->qcg;
 
 	pm_runtime_get_sync(&(pdev)->dev);
-
-#if defined(CONFIG_UFSFEATURE)
-	if (hba->dev_quirks & UFS_DEVICE_QUIRK_SAMSUNG_QLC)
-		ufsf_remove(ufs_qcom_get_ufsf(hba));
-#endif
-
 	for (i = 0; i < r->num_groups; i++, qcg++)
 		remove_group_qos(qcg);
          /*feature-flashaging806-v001-6-begin*/
@@ -5936,9 +5769,6 @@ static void ufs_qcom_shutdown(struct platform_device *pdev)
 	struct ufs_hba *hba;
 	struct scsi_device *sdev;
 	struct ufs_qcom_host *host;
-#if defined(CONFIG_UFSFEATURE)
-	struct ufsf_feature *ufsf;
-#endif
 
 	if (!is_bootdevice_ufs) {
 		dev_info(&pdev->dev, "UFS is not boot dev.\n");
@@ -5950,12 +5780,6 @@ static void ufs_qcom_shutdown(struct platform_device *pdev)
 
 	ufs_qcom_log_str(host, "0xdead\n");
 	pm_runtime_get_sync(hba->dev);
-#if defined(CONFIG_UFSFEATURE)
-	if (hba->dev_quirks & UFS_DEVICE_QUIRK_SAMSUNG_QLC) {
-		ufsf = ufs_qcom_get_ufsf(hba);
-		ufsf_suspend(ufsf);
-	}
-#endif
 
 	shost_for_each_device(sdev, hba->host) {
 		if (sdev == hba->sdev_ufs_device)
@@ -5970,98 +5794,6 @@ static void ufs_qcom_shutdown(struct platform_device *pdev)
 	 * to ensure the UFS_RESET TLMM register value is POR value
 	 */
 	ufs_qcom_device_reset_ctrl(hba, false);
-}
-
-int ufsf_pltfrm_suspend(struct device *dev)
-{
-	int ret;
-#if defined(CONFIG_UFSFEATURE)
-	struct ufs_hba *hba = dev_get_drvdata(dev);
-	struct ufsf_feature *ufsf = ufs_qcom_get_ufsf(hba);
-
-	ufsf_suspend(ufsf);
-#endif
-
-	ret = ufshcd_pltfrm_suspend(dev);
-#if defined(CONFIG_UFSFEATURE)
-	/* We assume link is off */
-	if (ret)
-		ufsf_resume(ufsf, true);
-#endif
-
-	return ret;
-}
-
-int ufsf_pltfrm_resume(struct device *dev)
-{
-	int ret;
-#if defined(CONFIG_UFSFEATURE)
-	struct ufs_hba *hba = dev_get_drvdata(dev);
-	struct ufsf_feature *ufsf = ufs_qcom_get_ufsf(hba);
-	bool is_link_off = ufshcd_is_link_off(hba);
-#endif
-
-	ret = ufshcd_pltfrm_resume(dev);
-#if defined(CONFIG_UFSFEATURE)
-	if (!ret)
-		ufsf_resume(ufsf, is_link_off);
-#endif
-
-	return ret;
-}
-
-int ufsf_pltfrm_runtime_suspend(struct device *dev)
-{
-	int ret;
-#if defined(CONFIG_UFSFEATURE)
-	struct ufs_hba *hba;
-	struct ufsf_feature *ufsf;
-
-	hba = dev_get_drvdata(dev);
-
-	if (hba->dev_quirks & UFS_DEVICE_QUIRK_SAMSUNG_QLC) {
-		ufsf = ufs_qcom_get_ufsf(hba);
-		ufsf_suspend(ufsf);
-	}
-#endif
-
-	ret = ufshcd_pltfrm_runtime_suspend(dev);
-#if defined(CONFIG_UFSFEATURE)
-	if (hba->dev_quirks & UFS_DEVICE_QUIRK_SAMSUNG_QLC) {
-		/* We assume link is off */
-		if (ret)
-			ufsf_resume(ufsf, true);
-	}
-#endif
-
-	return ret;
-}
-
-int ufsf_pltfrm_runtime_resume(struct device *dev)
-{
-	int ret;
-#if defined(CONFIG_UFSFEATURE)
-	struct ufs_hba *hba;
-	struct ufsf_feature *ufsf;
-	bool is_link_off;
-
-	hba = dev_get_drvdata(dev);
-
-	if (hba->dev_quirks & UFS_DEVICE_QUIRK_SAMSUNG_QLC) {
-		ufsf = ufs_qcom_get_ufsf(hba);
-		is_link_off = ufshcd_is_link_off(hba);
-	}
-#endif
-
-	ret = ufshcd_pltfrm_runtime_resume(dev);
-#if defined(CONFIG_UFSFEATURE)
-	if (hba->dev_quirks & UFS_DEVICE_QUIRK_SAMSUNG_QLC) {
-		if (!ret)
-			ufsf_resume(ufsf, is_link_off);
-	}
-#endif
-
-	return ret;
 }
 
 static const struct of_device_id ufs_qcom_of_match[] = {
@@ -6086,9 +5818,6 @@ static int ufshcd_pltfrm_suspend_wrapper(struct device *dev)
 		dev_err(dev, "%s UFS is not boot dev.\n", __func__);
 		return 0;
 	}
-	if (hba->dev_quirks & UFS_DEVICE_QUIRK_SAMSUNG_QLC) {
-		return ufsf_pltfrm_suspend(dev);
-	}
 	return ufshcd_pltfrm_suspend(dev);
 }
 
@@ -6100,17 +5829,14 @@ static int ufshcd_pltfrm_resume_wrapper(struct device *dev)
 		dev_err(dev, "%s UFS is not boot dev.\n", __func__);
 		return 0;
 	}
-	if (hba->dev_quirks & UFS_DEVICE_QUIRK_SAMSUNG_QLC) {
-		return ufsf_pltfrm_resume(dev);
-	}
 	return ufshcd_pltfrm_resume(dev);
 }
 
 static const struct dev_pm_ops ufs_qcom_pm_ops = {
 	.suspend	= ufshcd_pltfrm_suspend_wrapper,
 	.resume		= ufshcd_pltfrm_resume_wrapper,
-	.runtime_suspend = ufsf_pltfrm_runtime_suspend,
-	.runtime_resume  = ufsf_pltfrm_runtime_resume,
+	.runtime_suspend = ufshcd_pltfrm_runtime_suspend,
+	.runtime_resume  = ufshcd_pltfrm_runtime_resume,
 	.runtime_idle    = ufshcd_pltfrm_runtime_idle,
 };
 

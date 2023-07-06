@@ -4339,22 +4339,18 @@ static ssize_t icnss_show_fw_ready(struct device_driver *driver, char *buf)
 	bool bdfloadsuccess = false;
 	bool regdbloadsuccess = false;
 	bool cnssprobesuccess = false;
-	bool plat_env_null = false;
 	if (!penv) {
            icnss_pr_err("icnss_show_fw_ready plat_env is NULL!\n");
-           plat_env_null = true;
 	} else {
            firmware_ready = test_bit(ICNSS_FW_READY, &penv->state);
            regdbloadsuccess = test_bit(CNSS_LOAD_REGDB_SUCCESS, &penv->loadRegdbState);
            bdfloadsuccess = test_bit(CNSS_LOAD_BDF_SUCCESS, &penv->loadBdfState);
-           plat_env_null = false;
 	}
 	cnssprobesuccess = (cnssprobestate == CNSS_PROBE_SUCCESS);
-	return sprintf(buf, "%s:%s:%s:%s:%s",
+	return sprintf(buf, "%s:%s:%s:%s",
            (firmware_ready ? "fwstatus_ready" : "fwstatus_not_ready"),
            (regdbloadsuccess ? "regdb_loadsuccess" : "regdb_loadfail"),
            (bdfloadsuccess ? "bdf_loadsuccess" : "bdf_loadfail"),
-           (plat_env_null ? "platenv_fail" : "platenv_success"),
            (cnssprobesuccess ? "cnssprobe_success" : "cnssprobe_fail")
            );
 }

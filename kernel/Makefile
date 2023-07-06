@@ -180,4 +180,3 @@ obj-$(CONFIG_OPLUS_FEATURE_GKI_CPUFREQ_BOUNCING) += oplus_cpu/cpufreq_bouncing/
 #ifdef OPLUS_FEATURE_ABNORMAL_FLAG
 obj-$(CONFIG_OPLUS_FEATURE_ABNORMAL_FLAG) += oplus_cpu/oplus_overload/
 #endif
-obj-$(CONFIG_UA_KERNEL_CPU_IOCTL) += oplus_cpu/uad/

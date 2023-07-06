@@ -145,13 +145,7 @@ enum {
 	TCP_NOTIFY_REQUEST_BAT_INFO,
 	TCP_NOTIFY_WD_STATUS,
 	TCP_NOTIFY_CABLE_TYPE,
-#ifdef OPLUS_FEATURE_CHG_BASIC
-	TCP_NOTIFY_SWITCH_GET_STATE,
-	TCP_NOTIFY_SWITCH_SET_STATE,
-	TCP_NOTIFY_MISC_END = TCP_NOTIFY_SWITCH_SET_STATE,
-#else
-	TCP_NOTIFY_MISC_END =TCP_NOTIFY_CABLE_TYPE,
-#endif
+	TCP_NOTIFY_MISC_END = TCP_NOTIFY_CABLE_TYPE,
 };
 
 struct tcp_ny_pd_state {
@@ -310,22 +304,6 @@ struct tcp_ny_cable_type {
 	enum tcpc_cable_type type;
 };
 
-#ifdef OPLUS_FEATURE_CHG_BASIC
-struct tcp_ny_switch_set_status {
-	bool	 state;		/* 0: DP/DM state;  1: fastchg state */
-	bool 	(*pfunc)(int);	/* recevier call the pfunc to ack.*/
-};
-
-struct tcp_ny_switch_get_status {
-	bool	(*pfunc)(int);  /*recevier call the pfunc to ack.
-				* 0: default DP/DM state
-				* 1: fastchg state
-				* 2: audio state
-				* 3: unknow state
-				*/
-};
-#endif
-
 struct tcp_notify {
 	union {
 		struct tcp_ny_enable_state en_state;
@@ -344,10 +322,6 @@ struct tcp_notify {
 		struct tcp_ny_request_bat request_bat;
 		struct tcp_ny_wd_status wd_status;
 		struct tcp_ny_cable_type cable_type;
-#ifdef OPLUS_FEATURE_CHG_BASIC
-		struct tcp_ny_switch_set_status switch_set_status;
-		struct tcp_ny_switch_get_status switch_get_status;
-#endif
 	};
 };
 

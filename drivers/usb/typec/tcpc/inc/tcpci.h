@@ -203,9 +203,4 @@ int tcpci_notify_request_bat_info(
 
 #endif	/* CONFIG_USB_POWER_DELIVERY */
 
-#ifdef OPLUS_FEATURE_CHG_BASIC
-int tcpci_notify_switch_set_state(struct tcpc_device *tcpc, bool state, bool (*pfunc)(int));
-int tcpci_notify_switch_get_state(struct tcpc_device *tcpc, bool (*pfunc)(int));
-#endif
-
 #endif /* #ifndef __LINUX_RT_TCPC_H */

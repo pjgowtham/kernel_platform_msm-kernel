@@ -20,10 +20,6 @@
 #include "ufshcd.h"
 #include "unipro.h"
 
-#ifdef CONFIG_UFSFEATURE
-#include "ufsfeature.h"
-#endif
-
 #define MAX_UFS_QCOM_HOSTS	2
 #define MAX_U32                 (~(u32)0)
 #define MPHY_TX_FSM_STATE       0x41
@@ -234,20 +230,6 @@ enum unipro_err_time_stamp {
 	UNIPRO_9_STAMP,
 	STAMP_RECORD_MAX
 };
-
-enum unipro_err_time_gear {
-	UNIPRO_0_GEAR,
-	UNIPRO_1_GEAR,
-	UNIPRO_2_GEAR,
-	UNIPRO_3_GEAR,
-	UNIPRO_4_GEAR,
-	UNIPRO_5_GEAR,
-	UNIPRO_6_GEAR,
-	UNIPRO_7_GEAR,
-	UNIPRO_8_GEAR,
-	UNIPRO_9_GEAR
-};
-
 #define STAMP_MIN_INTERVAL ((ktime_t)600000000000) /*ns, 10min*/
 
 struct signal_quality {
@@ -266,9 +248,7 @@ struct signal_quality {
 	u32 unipro_TL_err_cnt[UNIPRO_TL_ERR_MAX];
 	u32 unipro_DME_err_total_cnt;
 	u32 unipro_DME_err_cnt[UNIPRO_DME_ERR_MAX];
-	/* first 10 error cnt, interval is 10min at least*/
-	u32 hs[STAMP_RECORD_MAX];
-	u32 gear[STAMP_RECORD_MAX];
+	/* first 10 error cnt, interval is 10min at least */
 	ktime_t stamp[STAMP_RECORD_MAX];
 	int stamp_pos;
 };
@@ -353,13 +333,6 @@ enum ufs_qcom_phy_init_type {
  */
 #define UFS_DEVICE_QUIRK_PA_HIBER8TIME          (1 << 15)
 
-/* Device Quirks */
-/*
- * Samsung QLC ufs device needs a different set of drivers for HID and TW.
- * Enable this quirk to config QLC HID & TW on.
- */
-#define UFS_DEVICE_QUIRK_SAMSUNG_QLC          (1 << 17)
-
 /*feature-devinfo-v001-1-begin*/
 struct ufs_transmission_status_t
 {
@@ -407,12 +380,6 @@ struct unipro_signal_quality_ctrl {
 	struct signal_quality record_upload;
 };
 /*feature-flashaging806-v001-3-end*/
-
-/*
- * Some ufs device vendors need a different TSync length.
- * Enable this quirk to give an additional TX_HS_SYNC_LENGTH.
- */
-#define UFS_DEVICE_QUIRK_PA_TX_HSG1_SYNC_LENGTH (1 << 16)
 
 static inline void
 ufs_qcom_get_controller_revision(struct ufs_hba *hba,
@@ -660,10 +627,6 @@ struct ufs_qcom_host {
 	cpumask_t perf_mask;
 	cpumask_t def_mask;
 	bool irq_affinity_support;
-
-#if defined(CONFIG_UFSFEATURE)
-	struct ufsf_feature ufsf;
-#endif
 };
 
 static inline u32
@@ -782,15 +745,6 @@ struct ufs_ioctl_query_data {
 	 */
 	__u8 buffer[0];
 };
-
-#if defined(CONFIG_UFSFEATURE)
-static inline struct ufsf_feature *ufs_qcom_get_ufsf(struct ufs_hba *hba)
-{
-	struct ufs_qcom_host *host = ufshcd_get_variant(hba);
-
-	return &host->ufsf;
-}
-#endif
 
 /* ufs-qcom-ice.c */
 

@@ -5678,11 +5678,7 @@ static ssize_t register_write_store(struct class *c,
 	u16 reg;
 	u8 val;
 
-#ifdef OPLUS_FEATURE_CHG_BASIC
-	if (2 == sscanf(buf, "%hx %hhx", &reg, &val)) {
-#else
 	if (2 == sscanf(buf, "%x %x", &reg, &val)) {
-#endif
 		if(reg >= 0xf000 && reg < 0xf300) {
 			rc = regmap_update_bits(chip->regmap, reg, 0xFF, val);
 			if (rc < 0)

@@ -212,30 +212,25 @@ int i2c_write(struct nfc_dev *nfc_dev, const char *buf, size_t count,
 	uint16_t i = 0;
 	uint16_t disp_len = GET_IPCLOG_MAX_PKT_LEN(count);
 
-/*
- * Add for: SN1XX_CHIP need to write wakeup_cmd but SN220_CHIP not
- * Get chip_type must send core_reset cmd, and then i2c_write() get chip_type is 0x00
- * SN220_CHIPID = "0xc1"
- */
-	if ((nfc_dev->nqx_info.info.chip_type != 0xc1) && (nfc_dev->nqx_info.info.chip_type != 0x00)) {
-		int retrycount = 0;
-		char wakeup_cmd[1] = {0};
-		while (++retrycount < 6) {
-			ret = i2c_master_send(nfc_dev->i2c_dev.client, wakeup_cmd, 1);
-			if (ret >= 0) {
-				break;
-			}
-			usleep_range(5000, 5100);
+	#ifdef OPLUS_BUG_STABILITY
+	int retrycount = 0;
+	char wakeup_cmd[1] = {0};
+	while (++retrycount < 6) {
+		ret = i2c_master_send(nfc_dev->i2c_dev.client, wakeup_cmd, 1);
+		if (ret >= 0) {
+			break;
 		}
-		if (ret < 0) {
-			pr_err("%s: failed to write wakeup_cmd : %d, retry for : %d times\n", __func__, ret, retrycount);
-		}
+		usleep_range(5000, 5100);
 	}
+	if (ret < 0) {
+		pr_err("%s: failed to write wakeup_cmd : %d, retry for : %d times\n", __func__, ret, retrycount);
+	}
+	#endif
 
 	if (count > MAX_DL_BUFFER_SIZE)
 		count = MAX_DL_BUFFER_SIZE;
 
-	pr_err("%s : writing %zu bytes.\n", __func__, count);
+	pr_debug("%s : writing %zu bytes.\n", __func__, count);
 
 	NFCLOG_IPC(nfc_dev, false, "%s sending %d B", __func__, count);
 
